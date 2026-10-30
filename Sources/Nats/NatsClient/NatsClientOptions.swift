@@ -16,6 +16,7 @@ import Foundation
 import Logging
 import NIO
 import NIOFoundationCompat
+import NIOSSL
 
 public class NatsClientOptions {
     private var urls: [URL] = []
@@ -30,6 +31,9 @@ public class NatsClientOptions {
     private var rootCertificate: URL? = nil
     private var clientCertificate: URL? = nil
     private var clientKey: URL? = nil
+    private var rootCertificatesInMemory: [NIOSSLCertificate]? = nil
+    private var clientCertificateChain: [NIOSSLCertificate]? = nil
+    private var clientPrivateKey: NIOSSLPrivateKey? = nil
     private var inboxPrefix: String = "_INBOX."
 
     public init() {}
@@ -162,6 +166,23 @@ public class NatsClientOptions {
         return self
     }
 
+    /// Root CAs held in memory. Used instead of a root CAs file when both are set.
+    public func rootCertificates(_ rootCertificates: [NIOSSLCertificate]) -> NatsClientOptions {
+        self.rootCertificatesInMemory = rootCertificates
+        return self
+    }
+
+    /// A client certificate chain and private key held in memory, so the key never has to be
+    /// written to a file. Used on every reconnect, and instead of client cert files when both
+    /// are set.
+    public func clientCertificate(
+        _ certificateChain: [NIOSSLCertificate], _ privateKey: NIOSSLPrivateKey
+    ) -> NatsClientOptions {
+        self.clientCertificateChain = certificateChain
+        self.clientPrivateKey = privateKey
+        return self
+    }
+
     /// Indicates whether the client will retain the order of URLs to connect to provided in ``NatsClientOptions/urls(_:)``
     /// If not set, the client will randomize the server pool.
     public func retainServersOrder() -> NatsClientOptions {
@@ -195,6 +216,9 @@ public class NatsClientOptions {
             clientCertificate: clientCertificate,
             clientKey: clientKey,
             rootCertificate: rootCertificate,
+            rootCertificatesInMemory: rootCertificatesInMemory,
+            clientCertificateChain: clientCertificateChain,
+            clientPrivateKey: clientPrivateKey,
             retryOnFailedConnect: initialReconnect
         )
         return client

@@ -47,6 +47,9 @@ class ConnectionHandler: ChannelInboundHandler {
     private var rootCertificate: URL?
     private var clientCertificate: URL?
     private var clientKey: URL?
+    private let rootCertificatesInMemory: [NIOSSLCertificate]?
+    private let clientCertificateChain: [NIOSSLCertificate]?
+    private let clientPrivateKey: NIOSSLPrivateKey?
 
     typealias InboundIn = ByteBuffer
     private let state = NIOLockedValueBox(NatsState.pending)
@@ -87,7 +90,9 @@ class ConnectionHandler: ChannelInboundHandler {
         retainServersOrder: Bool,
         pingInterval: TimeInterval, auth: Auth?, requireTls: Bool, tlsFirst: Bool,
         clientCertificate: URL?, clientKey: URL?,
-        rootCertificate: URL?, retryOnFailedConnect: Bool
+        rootCertificate: URL?, rootCertificatesInMemory: [NIOSSLCertificate]? = nil,
+        clientCertificateChain: [NIOSSLCertificate]? = nil,
+        clientPrivateKey: NIOSSLPrivateKey? = nil, retryOnFailedConnect: Bool
     ) {
         self.urls = urls
         self.group = .singleton
@@ -102,6 +107,9 @@ class ConnectionHandler: ChannelInboundHandler {
         self.clientCertificate = clientCertificate
         self.clientKey = clientKey
         self.rootCertificate = rootCertificate
+        self.rootCertificatesInMemory = rootCertificatesInMemory
+        self.clientCertificateChain = clientCertificateChain
+        self.clientPrivateKey = clientPrivateKey
         self.retryOnFailedConnect = retryOnFailedConnect
     }
 
@@ -460,6 +468,16 @@ class ConnectionHandler: ChannelInboundHandler {
                 file: clientKey.path, format: .pem)
             tlsConfiguration.privateKey = .privateKey(
                 privateKey)
+        }
+        // In-memory certificates and key take precedence over files.
+        if let rootCertificates = self.rootCertificatesInMemory {
+            tlsConfiguration.trustRoots = .certificates(rootCertificates)
+        }
+        if let certificateChain = self.clientCertificateChain,
+            let privateKey = self.clientPrivateKey
+        {
+            tlsConfiguration.certificateChain = certificateChain.map { .certificate($0) }
+            tlsConfiguration.privateKey = .privateKey(privateKey)
         }
         return tlsConfiguration
     }
